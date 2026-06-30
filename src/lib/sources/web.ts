@@ -34,13 +34,24 @@ function provider(): string {
   return (process.env.WEB_SEARCH_PROVIDER || DEFAULT_PROVIDER).toLowerCase()
 }
 
+/**
+ * Resolve a provider endpoint, allowing `WEB_SEARCH_BASE_URL` to override the
+ * default host (useful for a proxy, a self-hosted gateway, or testing).
+ */
+function endpoint(defaultUrl: string): string {
+  const base = process.env.WEB_SEARCH_BASE_URL?.trim()
+  if (!base) return defaultUrl
+  const path = new URL(defaultUrl).pathname
+  return new URL(path, base).toString()
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
 
 // --- Tavily (default) -------------------------------------------------------
 const tavily: ProviderFn = async (apiKey, input) => {
-  const res = await fetch('https://api.tavily.com/search', {
+  const res = await fetch(endpoint('https://api.tavily.com/search'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -74,7 +85,7 @@ const tavily: ProviderFn = async (apiKey, input) => {
 
 // --- Brave Search -----------------------------------------------------------
 const brave: ProviderFn = async (apiKey, input) => {
-  const url = new URL('https://api.search.brave.com/res/v1/web/search')
+  const url = new URL(endpoint('https://api.search.brave.com/res/v1/web/search'))
   url.searchParams.set('q', input.query)
   url.searchParams.set('count', String(clampLimit(input.limit)))
   const res = await fetch(url, {
@@ -106,7 +117,7 @@ const brave: ProviderFn = async (apiKey, input) => {
 
 // --- Serper (google) --------------------------------------------------------
 const serper: ProviderFn = async (apiKey, input) => {
-  const res = await fetch('https://google.serper.dev/search', {
+  const res = await fetch(endpoint('https://google.serper.dev/search'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-KEY': apiKey },
     body: JSON.stringify({ q: input.query, num: clampLimit(input.limit) }),

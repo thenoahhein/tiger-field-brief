@@ -126,6 +126,7 @@ Set an API key and (optionally) pick a provider. **Tavily is the default.**
 ```dotenv
 WEB_SEARCH_PROVIDER="tavily"   # tavily (default) | brave | serper
 WEB_SEARCH_API_KEY="..."
+WEB_SEARCH_BASE_URL=""         # optional: override host (proxy / self-hosted / testing)
 ```
 
 Returns page title, URL, snippet/extracted text, published date (when
