@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RawNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  noteDate  DateTime
+  source    String?
+  company   String?
+  persona   String?
+  workload  String?
+  rawText   String
+
+  brief   Brief?
+  signals Signal[]
+}
+
+model Signal {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  rawNoteId String
+  rawNote   RawNote @relation(fields: [rawNoteId], references: [id], onDelete: Cascade)
+
+  source                String?
+  company               String?
+  persona               String?
+  workload              String?
+  currentSystem         String?
+  painCategory          String?
+  pain                  String?
+  competitor            String?
+  exactCustomerLanguage String?
+  productConfusion      String?
+  docsGap               String?
+  salesEnablementNeed   String?
+  productFeedback       String?
+  businessImplication   String?
+  suggestedAction       String?
+  confidence            Int?
+
+  @@index([rawNoteId])
+}
+
+model Brief {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  rawNoteId String  @unique
+  rawNote   RawNote @relation(fields: [rawNoteId], references: [id], onDelete: Cascade)
+
+  title                 String?
+  strongestMarketSignal String?
+  topSignalsJson        Json
+  repeatedPainsJson     Json
+  customerLanguageJson  Json
+  competitorsJson       Json
+  productConfusionJson  Json
+  docsGapsJson          Json
+  salesEnablementJson   Json
+  productFeedbackJson   Json
+  recommendedAction     String?
+  pmmTakeaway           String?
+  fullMarkdown          String
+}
