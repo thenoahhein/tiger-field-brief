@@ -70,9 +70,8 @@ export const llmSignalSchema = z.object({
   suggestedAction: nullableString,
   confidence: z
     .number()
-    .int()
     .nullish()
-    .transform((v) => v ?? null),
+    .transform((v) => (v == null ? null : Math.round(v))),
   sourceQuality: z
     .enum(['high', 'medium', 'low'])
     .nullish()
