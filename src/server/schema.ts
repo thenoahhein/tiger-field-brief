@@ -73,6 +73,21 @@ export const llmSignalSchema = z.object({
     .int()
     .nullish()
     .transform((v) => v ?? null),
+  sourceQuality: z
+    .enum(['high', 'medium', 'low'])
+    .nullish()
+    .transform((v) => v ?? null),
+  signalType: z
+    .enum([
+      'customer',
+      'prospect',
+      'internal',
+      'public_market',
+      'competitor',
+      'unknown',
+    ])
+    .nullish()
+    .transform((v) => v ?? null),
 })
 export type LlmSignal = z.infer<typeof llmSignalSchema>
 
@@ -82,3 +97,26 @@ export const llmResponseSchema = z.object({
   signals: z.array(llmSignalSchema).default([]),
 })
 export type LlmResponse = z.infer<typeof llmResponseSchema>
+
+/** Source types that can be searched (manual paste is excluded). */
+export const searchableSourceSchema = z.enum(['web', 'x', 'slack'])
+
+/** Input accepted by the "Search Sources" server function. */
+export const sourceSearchSchema = z.object({
+  // "all" fans out to every configured connector.
+  source: z.union([searchableSourceSchema, z.literal('all')]),
+  query: z.string().trim().min(1, 'A query is required.'),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  since: z.string().trim().optional(),
+  until: z.string().trim().optional(),
+})
+export type SourceSearchRequest = z.infer<typeof sourceSearchSchema>
+
+/** Input for generating a brief from selected source results. */
+export const generateFromResultsSchema = z.object({
+  resultIds: z.array(z.string().min(1)).min(1, 'Select at least one result.'),
+  noteDate: z.string().min(1, 'A date is required.'),
+})
+export type GenerateFromResultsInput = z.infer<
+  typeof generateFromResultsSchema
+>

@@ -188,6 +188,16 @@ function BriefDetail() {
                       confidence {s.confidence}
                     </span>
                   )}
+                  {s.signalType && (
+                    <span className="rounded bg-sky-100 px-2 py-0.5 text-sky-800">
+                      {s.signalType}
+                    </span>
+                  )}
+                  {s.sourceQuality && (
+                    <span className="rounded bg-slate-100 px-2 py-0.5">
+                      quality: {s.sourceQuality}
+                    </span>
+                  )}
                 </div>
                 {s.pain && (
                   <p className="mt-2">

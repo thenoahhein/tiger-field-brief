@@ -1,8 +1,74 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
 import { prisma } from './db'
 import { generateFieldBrief } from './llm'
-import { generateInputSchema } from './schema'
+import {
+  generateInputSchema,
+  type BriefMetadata,
+  type LlmBrief,
+  type LlmSignal,
+} from './schema'
+
+/**
+ * Persist a generated brief + its signals against an already-created RawNote,
+ * inside an existing transaction. Shared by the manual flow (generateBrief) and
+ * the source-search flow (generateBriefFromResults in ./sources).
+ */
+export async function persistBriefBundle(
+  tx: Prisma.TransactionClient,
+  rawNoteId: string,
+  metadata: BriefMetadata,
+  brief: LlmBrief,
+  signals: LlmSignal[],
+) {
+  const savedBrief = await tx.brief.create({
+    data: {
+      rawNoteId,
+      title: brief.title,
+      strongestMarketSignal: brief.strongestMarketSignal,
+      topSignalsJson: brief.topSignals,
+      repeatedPainsJson: brief.repeatedPains,
+      customerLanguageJson: brief.customerLanguage,
+      competitorsJson: brief.competitors,
+      productConfusionJson: brief.productConfusion,
+      docsGapsJson: brief.docsGaps,
+      salesEnablementJson: brief.salesEnablement,
+      productFeedbackJson: brief.productFeedback,
+      recommendedAction: brief.recommendedAction,
+      pmmTakeaway: brief.pmmTakeaway,
+      fullMarkdown: brief.fullMarkdown,
+    },
+  })
+
+  if (signals.length > 0) {
+    await tx.signal.createMany({
+      data: signals.map((s) => ({
+        rawNoteId,
+        source: s.source ?? metadata.source,
+        company: s.company ?? metadata.company,
+        persona: s.persona ?? metadata.persona,
+        workload: s.workload ?? metadata.workload,
+        currentSystem: s.currentSystem,
+        painCategory: s.painCategory,
+        pain: s.pain,
+        competitor: s.competitor,
+        exactCustomerLanguage: s.exactCustomerLanguage,
+        productConfusion: s.productConfusion,
+        docsGap: s.docsGap,
+        salesEnablementNeed: s.salesEnablementNeed,
+        productFeedback: s.productFeedback,
+        businessImplication: s.businessImplication,
+        suggestedAction: s.suggestedAction,
+        confidence: s.confidence,
+        sourceQuality: s.sourceQuality,
+        signalType: s.signalType,
+      })),
+    })
+  }
+
+  return savedBrief
+}
 
 /**
  * Generate a field brief from raw notes + metadata, persist the raw note,
@@ -33,50 +99,7 @@ export const generateBrief = createServerFn({ method: 'POST' })
         },
       })
 
-      const savedBrief = await tx.brief.create({
-        data: {
-          rawNoteId: rawNote.id,
-          title: brief.title,
-          strongestMarketSignal: brief.strongestMarketSignal,
-          topSignalsJson: brief.topSignals,
-          repeatedPainsJson: brief.repeatedPains,
-          customerLanguageJson: brief.customerLanguage,
-          competitorsJson: brief.competitors,
-          productConfusionJson: brief.productConfusion,
-          docsGapsJson: brief.docsGaps,
-          salesEnablementJson: brief.salesEnablement,
-          productFeedbackJson: brief.productFeedback,
-          recommendedAction: brief.recommendedAction,
-          pmmTakeaway: brief.pmmTakeaway,
-          fullMarkdown: brief.fullMarkdown,
-        },
-      })
-
-      if (signals.length > 0) {
-        await tx.signal.createMany({
-          data: signals.map((s) => ({
-            rawNoteId: rawNote.id,
-            source: s.source ?? metadata.source,
-            company: s.company ?? metadata.company,
-            persona: s.persona ?? metadata.persona,
-            workload: s.workload ?? metadata.workload,
-            currentSystem: s.currentSystem,
-            painCategory: s.painCategory,
-            pain: s.pain,
-            competitor: s.competitor,
-            exactCustomerLanguage: s.exactCustomerLanguage,
-            productConfusion: s.productConfusion,
-            docsGap: s.docsGap,
-            salesEnablementNeed: s.salesEnablementNeed,
-            productFeedback: s.productFeedback,
-            businessImplication: s.businessImplication,
-            suggestedAction: s.suggestedAction,
-            confidence: s.confidence,
-          })),
-        })
-      }
-
-      return savedBrief
+      return persistBriefBundle(tx, rawNote.id, metadata, brief, signals)
     })
 
     return { id: created.id }

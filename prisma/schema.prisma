@@ -17,8 +17,9 @@ model RawNote {
   workload  String?
   rawText   String
 
-  brief   Brief?
-  signals Signal[]
+  brief         Brief?
+  signals       Signal[]
+  sourceResults SourceResult[]
 }
 
 model Signal {
@@ -44,7 +45,47 @@ model Signal {
   businessImplication   String?
   suggestedAction       String?
   confidence            Int?
+  sourceQuality         String?
+  signalType            String?
 
+  @@index([rawNoteId])
+}
+
+model SourceSearchRun {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sourceType String
+  query      String
+  since      DateTime?
+  until      DateTime?
+  limit      Int?
+
+  results SourceResult[]
+}
+
+model SourceResult {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  searchRunId String
+  searchRun   SourceSearchRun @relation(fields: [searchRunId], references: [id], onDelete: Cascade)
+
+  sourceType   String
+  sourceName   String?
+  title        String?
+  url          String?
+  author       String?
+  channel      String?
+  publishedAt  DateTime?
+  capturedAt   DateTime @default(now())
+  text         String
+  metadataJson Json?
+
+  rawNoteId String?
+  rawNote   RawNote? @relation(fields: [rawNoteId], references: [id], onDelete: SetNull)
+
+  @@index([searchRunId])
   @@index([rawNoteId])
 }
 
