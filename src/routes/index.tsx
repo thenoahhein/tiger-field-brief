@@ -9,6 +9,11 @@ const links = [
     desc: 'Paste raw GTM notes and generate a structured daily brief.',
   },
   {
+    to: '/sources',
+    title: 'Sources',
+    desc: 'Pull read-only GTM signal from web, X, and Slack into a brief.',
+  },
+  {
     to: '/briefs',
     title: 'Briefs',
     desc: 'Browse past daily briefs in reverse chronological order.',

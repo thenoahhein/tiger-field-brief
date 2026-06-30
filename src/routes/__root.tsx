@@ -49,6 +49,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               </Link>
               <nav className="flex items-center gap-1">
                 <NavLink to="/new">New Brief</NavLink>
+                <NavLink to="/sources">Sources</NavLink>
                 <NavLink to="/briefs">Briefs</NavLink>
                 <NavLink to="/signals">Signals</NavLink>
               </nav>

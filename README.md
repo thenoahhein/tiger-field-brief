@@ -19,13 +19,17 @@ and saves everything to Postgres so you can browse and search later.
 
 ## Pages
 
-| Route         | Purpose                                                        |
-| ------------- | ------------------------------------------------------------- |
-| `/`           | Landing page with links to New Brief / Briefs / Signals       |
-| `/new`        | Form to paste raw notes + metadata and generate a brief       |
-| `/briefs`     | Saved briefs, reverse-chronological                           |
-| `/briefs/:id` | Full brief, the raw notes used, and extracted signals         |
-| `/signals`    | Table of all extracted signals with filters + search          |
+| Route               | Purpose                                                        |
+| ------------------- | -------------------------------------------------------------- |
+| `/`                 | Landing page                                                   |
+| `/new`              | Form to paste raw notes + metadata and generate a brief        |
+| `/sources`          | Configuration status of each source (manual / web / X / Slack) |
+| `/sources/search`   | Search external sources, select results, generate a brief      |
+| `/sources/runs`     | History of past source searches                                |
+| `/sources/runs/:id` | A single search run, its results, and any generated brief      |
+| `/briefs`           | Saved briefs, reverse-chronological                            |
+| `/briefs/:id`       | Full brief, the raw notes used, and extracted signals          |
+| `/signals`          | Table of all extracted signals with filters + search           |
 
 ## Setup
 
@@ -102,18 +106,125 @@ Open http://localhost:3000.
 4. On success the raw note, brief, and signals are written to Postgres in a
    single transaction, and you're redirected to the brief.
 
+## External sources
+
+Beyond manual paste, the app can pull **read-only** GTM signal from external
+sources and feed it into the same brief pipeline. Every integration is optional
+and environment-variable driven; if a source is not configured it shows as
+**Not configured** on `/sources` and is skipped (the app never breaks).
+
+> **Read-only safety.** No connector ever writes to a remote system. X is
+> search/read only — never post, like, reply, repost, follow, or DM. Slack is
+> search/read only — never send/update messages, create canvases, or modify
+> users/channels. Credentials are read only in server code (`src/server/*`,
+> `src/lib/sources/*`) and are never exposed to the client.
+
+### 1. Web search
+
+Set an API key and (optionally) pick a provider. **Tavily is the default.**
+If `PERPLEXITY_API_KEY` is set and `WEB_SEARCH_PROVIDER` is unset, the app uses
+Perplexity automatically.
+
+```dotenv
+WEB_SEARCH_PROVIDER="tavily"   # tavily (default) | brave | serper | perplexity
+WEB_SEARCH_API_KEY="..."
+PERPLEXITY_API_KEY="..."       # optional; preferred for WEB_SEARCH_PROVIDER=perplexity
+WEB_SEARCH_BASE_URL=""         # optional: override host (proxy / self-hosted / testing)
+```
+
+Returns page title, URL, snippet/extracted text, published date (when
+available), and a captured timestamp. To add a provider, implement a function in
+`src/lib/sources/web.ts` and register it in `PROVIDERS`.
+
+### 2. X (Twitter) via MCP
+
+X search runs through an MCP server. The hosted X server supports a simple
+read-only app-only Bearer route, which is the recommended v0 setup here:
+
+```dotenv
+X_MCP_SERVER_URL="https://api.x.com/mcp"
+X_MCP_AUTH_TOKEN="..."          # app-only Bearer token; keep server-side only
+X_MCP_SEARCH_TOOL=""            # optional: explicit search tool name
+X_MCP_PROTOCOL_VERSION="2025-06-18"
+```
+
+The connector auto-detects a search tool (`search_posts_all`, `search_posts`,
+`search_tweets`, `search`, …). If your server names it differently, set
+`X_MCP_SEARCH_TOOL`. The MCP client (`src/lib/sources/mcp.ts`) is a thin
+JSON-RPC-over-HTTP wrapper that performs the Streamable HTTP initialize
+handshake and carries the `Mcp-Session-Id` header between requests.
+
+### 3. Slack (MCP or Web API)
+
+Two modes, MCP preferred:
+
+```dotenv
+# Mode A — Slack MCP (preferred)
+SLACK_MCP_SERVER_URL="https://your-slack-mcp-server/mcp"
+SLACK_MCP_AUTH_TOKEN="..."
+SLACK_MCP_SEARCH_TOOL=""        # optional: explicit search tool name
+
+# Mode B — Slack Web API (search.messages)
+SLACK_BOT_TOKEN="xoxp-..."
+```
+
+> `search.messages` requires a **user** token (`xoxp-…`) with the `search:read`
+> scope. A bot token (`xoxb-…`) cannot call search — use MCP mode in that case.
+
+Slack is **read-only**: search messages, and read text, channel, author,
+timestamp, and permalink when available.
+
+### Running a source search
+
+1. Open `/sources` to confirm which integrations are configured.
+2. Go to `/sources/search`, pick a source (or **All configured**), type a query
+   (or click a **default search** chip), optionally set since/until/limit, and
+   click **Search Sources**. The run + results are saved.
+3. Tick the results you want and click **Generate Brief From Selected
+   Results**. Selected results are combined into one raw note (with source
+   metadata preserved), run through `generateFieldBrief()`, saved as a normal
+   `RawNote` + `Signal`s + `Brief`, linked back to the source results, and you
+   are redirected to the brief.
+4. Review past searches at `/sources/runs`.
+
+### Source quality
+
+External results are **raw market signals, not verified facts**. The prompt asks
+the model to distinguish customer/prospect, internal, public-market, competitor,
+and weak/noisy evidence, and not to overstate weak signal. Each extracted signal
+carries `sourceQuality` (`high|medium|low`) and `signalType`
+(`customer|prospect|internal|public_market|competitor|unknown`).
+
+### Sensitive data
+
+- **Slack results may contain confidential internal information.** Be deliberate
+  about what you convert into a brief.
+- Result text is truncated per result (`MAX_RESULT_TEXT_CHARS`) and the combined
+  raw note is capped (`MAX_COMBINED_BRIEF_CHARS`) so no more than necessary is
+  sent to the LLM. Original metadata is preserved in the database.
+- Tokens, API keys, auth headers, and full source payloads are never logged.
+
 ## Project layout
 
 ```
-prisma/schema.prisma      # RawNote, Signal, Brief models
-src/server/db.ts          # Prisma client singleton
-src/server/schema.ts      # Zod schemas (input + LLM output)
-src/server/llm.ts         # generateFieldBrief() — LLM call + validation
-src/server/briefs.ts      # server functions: generate / list / get / filter
-src/routes/index.tsx      # /
-src/routes/new.tsx        # /new
-src/routes/briefs/        # /briefs and /briefs/$id
-src/routes/signals.tsx    # /signals
+prisma/schema.prisma           # RawNote, Signal, Brief, SourceSearchRun, SourceResult
+src/server/db.ts               # Prisma client singleton
+src/server/schema.ts           # Zod schemas (input + LLM output + source search)
+src/server/llm.ts              # generateFieldBrief() — LLM call + validation
+src/server/briefs.ts           # server fns: generate / list / get / filter + persist helper
+src/server/sources.ts          # server fns: source search / runs / generate-from-results
+src/lib/sources/               # read-only source connector layer
+  types.ts                     #   shared SourceConnector / SourceSearchResult types
+  web.ts                       #   web search (tavily | brave | serper)
+  x.ts                         #   X via MCP (read-only)
+  slack.ts                     #   Slack via MCP or Web API (read-only)
+  mcp.ts                       #   minimal MCP JSON-RPC client
+  index.ts                     #   connector registry + status helpers
+src/config/default-searches.ts # default saved search groups
+src/routes/sources/            # /sources, /sources/search, /sources/runs[, /$id]
+src/routes/new.tsx             # /new
+src/routes/briefs/             # /briefs and /briefs/$id
+src/routes/signals.tsx         # /signals
 ```
 
 ## Useful commands

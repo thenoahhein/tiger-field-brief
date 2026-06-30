@@ -20,6 +20,15 @@ TigerData sells a Postgres-based time-series, analytics, and real-time data plat
 
 Analyze the raw notes below. Ground every recommendation in the notes. Do not invent details. If evidence is weak, say so.
 
+Some notes may come from web search, X posts, or Slack messages. Treat these as raw market signals, not verified facts. Distinguish between:
+- customer/prospect signal
+- internal team signal
+- public market chatter
+- competitor narrative
+- weak/noisy evidence
+
+Do not overstate weak evidence. When source quality is low, say so.
+
 Return strict JSON with this shape:
 
 {
@@ -61,7 +70,9 @@ Return strict JSON with this shape:
       "productFeedback": "string or null",
       "businessImplication": "string or null",
       "suggestedAction": "string or null",
-      "confidence": 1
+      "confidence": 1,
+      "sourceQuality": "high | medium | low",
+      "signalType": "customer | prospect | internal | public_market | competitor | unknown"
     }
   ]
 }

@@ -12,8 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as NewRouteImport } from './routes/new'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SourcesIndexRouteImport } from './routes/sources/index'
 import { Route as BriefsIndexRouteImport } from './routes/briefs/index'
+import { Route as SourcesSearchRouteImport } from './routes/sources/search'
 import { Route as BriefsIdRouteImport } from './routes/briefs/$id'
+import { Route as SourcesRunsIndexRouteImport } from './routes/sources/runs/index'
+import { Route as SourcesRunsIdRouteImport } from './routes/sources/runs/$id'
 
 const SignalsRoute = SignalsRouteImport.update({
   id: '/signals',
@@ -30,14 +34,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SourcesIndexRoute = SourcesIndexRouteImport.update({
+  id: '/sources/',
+  path: '/sources/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BriefsIndexRoute = BriefsIndexRouteImport.update({
   id: '/briefs/',
   path: '/briefs/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SourcesSearchRoute = SourcesSearchRouteImport.update({
+  id: '/sources/search',
+  path: '/sources/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BriefsIdRoute = BriefsIdRouteImport.update({
   id: '/briefs/$id',
   path: '/briefs/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SourcesRunsIndexRoute = SourcesRunsIndexRouteImport.update({
+  id: '/sources/runs/',
+  path: '/sources/runs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SourcesRunsIdRoute = SourcesRunsIdRouteImport.update({
+  id: '/sources/runs/$id',
+  path: '/sources/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -46,14 +70,22 @@ export interface FileRoutesByFullPath {
   '/new': typeof NewRoute
   '/signals': typeof SignalsRoute
   '/briefs/$id': typeof BriefsIdRoute
+  '/sources/search': typeof SourcesSearchRoute
   '/briefs/': typeof BriefsIndexRoute
+  '/sources/': typeof SourcesIndexRoute
+  '/sources/runs/$id': typeof SourcesRunsIdRoute
+  '/sources/runs/': typeof SourcesRunsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/new': typeof NewRoute
   '/signals': typeof SignalsRoute
   '/briefs/$id': typeof BriefsIdRoute
+  '/sources/search': typeof SourcesSearchRoute
   '/briefs': typeof BriefsIndexRoute
+  '/sources': typeof SourcesIndexRoute
+  '/sources/runs/$id': typeof SourcesRunsIdRoute
+  '/sources/runs': typeof SourcesRunsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,14 +93,46 @@ export interface FileRoutesById {
   '/new': typeof NewRoute
   '/signals': typeof SignalsRoute
   '/briefs/$id': typeof BriefsIdRoute
+  '/sources/search': typeof SourcesSearchRoute
   '/briefs/': typeof BriefsIndexRoute
+  '/sources/': typeof SourcesIndexRoute
+  '/sources/runs/$id': typeof SourcesRunsIdRoute
+  '/sources/runs/': typeof SourcesRunsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/new' | '/signals' | '/briefs/$id' | '/briefs/'
+  fullPaths:
+    | '/'
+    | '/new'
+    | '/signals'
+    | '/briefs/$id'
+    | '/sources/search'
+    | '/briefs/'
+    | '/sources/'
+    | '/sources/runs/$id'
+    | '/sources/runs/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/new' | '/signals' | '/briefs/$id' | '/briefs'
-  id: '__root__' | '/' | '/new' | '/signals' | '/briefs/$id' | '/briefs/'
+  to:
+    | '/'
+    | '/new'
+    | '/signals'
+    | '/briefs/$id'
+    | '/sources/search'
+    | '/briefs'
+    | '/sources'
+    | '/sources/runs/$id'
+    | '/sources/runs'
+  id:
+    | '__root__'
+    | '/'
+    | '/new'
+    | '/signals'
+    | '/briefs/$id'
+    | '/sources/search'
+    | '/briefs/'
+    | '/sources/'
+    | '/sources/runs/$id'
+    | '/sources/runs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,7 +140,11 @@ export interface RootRouteChildren {
   NewRoute: typeof NewRoute
   SignalsRoute: typeof SignalsRoute
   BriefsIdRoute: typeof BriefsIdRoute
+  SourcesSearchRoute: typeof SourcesSearchRoute
   BriefsIndexRoute: typeof BriefsIndexRoute
+  SourcesIndexRoute: typeof SourcesIndexRoute
+  SourcesRunsIdRoute: typeof SourcesRunsIdRoute
+  SourcesRunsIndexRoute: typeof SourcesRunsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -102,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sources/': {
+      id: '/sources/'
+      path: '/sources'
+      fullPath: '/sources/'
+      preLoaderRoute: typeof SourcesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/briefs/': {
       id: '/briefs/'
       path: '/briefs'
@@ -109,11 +184,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BriefsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sources/search': {
+      id: '/sources/search'
+      path: '/sources/search'
+      fullPath: '/sources/search'
+      preLoaderRoute: typeof SourcesSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/briefs/$id': {
       id: '/briefs/$id'
       path: '/briefs/$id'
       fullPath: '/briefs/$id'
       preLoaderRoute: typeof BriefsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sources/runs/': {
+      id: '/sources/runs/'
+      path: '/sources/runs'
+      fullPath: '/sources/runs/'
+      preLoaderRoute: typeof SourcesRunsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sources/runs/$id': {
+      id: '/sources/runs/$id'
+      path: '/sources/runs/$id'
+      fullPath: '/sources/runs/$id'
+      preLoaderRoute: typeof SourcesRunsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -124,7 +220,11 @@ const rootRouteChildren: RootRouteChildren = {
   NewRoute: NewRoute,
   SignalsRoute: SignalsRoute,
   BriefsIdRoute: BriefsIdRoute,
+  SourcesSearchRoute: SourcesSearchRoute,
   BriefsIndexRoute: BriefsIndexRoute,
+  SourcesIndexRoute: SourcesIndexRoute,
+  SourcesRunsIdRoute: SourcesRunsIdRoute,
+  SourcesRunsIndexRoute: SourcesRunsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
