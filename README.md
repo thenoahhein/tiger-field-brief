@@ -122,10 +122,13 @@ and environment-variable driven; if a source is not configured it shows as
 ### 1. Web search
 
 Set an API key and (optionally) pick a provider. **Tavily is the default.**
+If `PERPLEXITY_API_KEY` is set and `WEB_SEARCH_PROVIDER` is unset, the app uses
+Perplexity automatically.
 
 ```dotenv
-WEB_SEARCH_PROVIDER="tavily"   # tavily (default) | brave | serper
+WEB_SEARCH_PROVIDER="tavily"   # tavily (default) | brave | serper | perplexity
 WEB_SEARCH_API_KEY="..."
+PERPLEXITY_API_KEY="..."       # optional; preferred for WEB_SEARCH_PROVIDER=perplexity
 WEB_SEARCH_BASE_URL=""         # optional: override host (proxy / self-hosted / testing)
 ```
 
@@ -135,19 +138,21 @@ available), and a captured timestamp. To add a provider, implement a function in
 
 ### 2. X (Twitter) via MCP
 
-X search runs through an MCP server (hosted, local, or any MCP-compatible X API
-server). It is **read-only** — only a search/read tool is ever called.
+X search runs through an MCP server. The hosted X server supports a simple
+read-only app-only Bearer route, which is the recommended v0 setup here:
 
 ```dotenv
-X_MCP_SERVER_URL="https://your-x-mcp-server/mcp"
-X_MCP_AUTH_TOKEN="..."          # optional bearer token for the MCP server
+X_MCP_SERVER_URL="https://api.x.com/mcp"
+X_MCP_AUTH_TOKEN="..."          # app-only Bearer token; keep server-side only
 X_MCP_SEARCH_TOOL=""            # optional: explicit search tool name
+X_MCP_PROTOCOL_VERSION="2025-06-18"
 ```
 
-The connector auto-detects a search tool (`search_tweets`, `search_posts`,
-`search`, …). If your server names it differently, set `X_MCP_SEARCH_TOOL`. The
-MCP client (`src/lib/sources/mcp.ts`) is a thin JSON-RPC-over-HTTP v0 wrapper;
-swap in the official `@modelcontextprotocol/sdk` later if you need more.
+The connector auto-detects a search tool (`search_posts_all`, `search_posts`,
+`search_tweets`, `search`, …). If your server names it differently, set
+`X_MCP_SEARCH_TOOL`. The MCP client (`src/lib/sources/mcp.ts`) is a thin
+JSON-RPC-over-HTTP wrapper that performs the Streamable HTTP initialize
+handshake and carries the `Mcp-Session-Id` header between requests.
 
 ### 3. Slack (MCP or Web API)
 

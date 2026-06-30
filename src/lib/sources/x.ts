@@ -28,14 +28,18 @@ import {
  * to a single text result. Adjust `SEARCH_TOOL_CANDIDATES` / env override for
  * your specific X MCP server.
  *
- * TODO: when a canonical X MCP server is chosen, tighten the field mapping and
- * (optionally) replace this thin client with the official MCP SDK.
+ * For the hosted X MCP server, use:
+ *   X_MCP_SERVER_URL=https://api.x.com/mcp
+ *   X_MCP_AUTH_TOKEN=<app-only bearer token>
  */
 
 const SEARCH_TOOL_CANDIDATES = [
+  'search_posts_all',
+  'search_posts_recent',
+  'search_posts',
   'search_tweets',
   'searchTweets',
-  'search_posts',
+  'full_archive_search',
   'search',
   'recent_search',
   'tweet_search',
@@ -44,7 +48,11 @@ const SEARCH_TOOL_CANDIDATES = [
 function options(): McpClientOptions | null {
   const serverUrl = process.env.X_MCP_SERVER_URL
   if (!serverUrl) return null
-  return { serverUrl, authToken: process.env.X_MCP_AUTH_TOKEN }
+  return {
+    serverUrl,
+    authToken: process.env.X_MCP_AUTH_TOKEN,
+    protocolVersion: process.env.X_MCP_PROTOCOL_VERSION ?? '2025-06-18',
+  }
 }
 
 function nowIso(): string {
@@ -59,6 +67,10 @@ function toItems(structured: unknown, text: string): Record<string, unknown>[] {
       const v = structured[key]
       if (Array.isArray(v)) return v.filter(isRecord)
     }
+    if (isRecord(structured.result)) {
+      const nested = toItems(structured.result, '')
+      if (nested.length > 0) return nested
+    }
     return [structured]
   }
   // Try to parse JSON embedded in text content.
@@ -71,6 +83,10 @@ function toItems(structured: unknown, text: string): Record<string, unknown>[] {
         for (const key of ['results', 'data', 'tweets', 'posts']) {
           const v = parsed[key]
           if (Array.isArray(v)) return v.filter(isRecord)
+        }
+        if (isRecord(parsed.result)) {
+          const nested = toItems(parsed.result, '')
+          if (nested.length > 0) return nested
         }
         return [parsed]
       }
@@ -90,10 +106,14 @@ function mapItem(
     (isRecord(item.user)
       ? pickString(item.user, 'username', 'screen_name', 'name')
       : undefined)
-  const id = pickString(item, 'id', 'id_str', 'tweet_id')
+  const id = pickString(item, 'id', 'id_str', 'tweet_id', 'post_id')
   const url =
     pickString(item, 'url', 'permalink', 'link') ??
-    (author && id ? `https://x.com/${author}/status/${id}` : undefined)
+    (author && id
+      ? `https://x.com/${author}/status/${id}`
+      : id
+        ? `https://x.com/i/web/status/${id}`
+        : undefined)
   return {
     sourceType: 'x',
     sourceName: 'x',
@@ -102,19 +122,53 @@ function mapItem(
     publishedAt: pickString(item, 'created_at', 'createdAt', 'date', 'timestamp'),
     capturedAt: nowIso(),
     text: truncate(
-      pickString(item, 'text', 'full_text', 'content', 'body') ?? '',
+      pickString(item, 'text', 'full_text', 'content', 'body', 'message') ?? '',
       MAX_RESULT_TEXT_CHARS,
     ),
-    metadata: { query, id },
+    metadata: { query, id, authorId: pickString(item, 'author_id', 'authorId') },
   }
+}
+
+function buildSearchArgs(
+  tool: string,
+  input: SourceSearchInput,
+  limit: number,
+): Record<string, unknown> {
+  if (tool.toLowerCase().startsWith('search_posts')) {
+    const args: Record<string, unknown> = {
+      query: input.query,
+      max_results: limit,
+      'post.fields': 'created_at,author_id,public_metrics,entities,source',
+      expansions: 'author_id',
+      'user.fields': 'username,name',
+    }
+    if (input.since) args.start_time = input.since
+    if (input.until) args.end_time = input.until
+    return args
+  }
+
+  const args: Record<string, unknown> = {
+    query: input.query,
+    q: input.query,
+    max_results: limit,
+    limit,
+    since: input.since,
+    until: input.until,
+  }
+  if (!input.since) delete args.since
+  if (!input.until) delete args.until
+  return args
 }
 
 export const xConnector: SourceConnector = {
   type: 'x',
   name: 'X (via MCP)',
-  requiredEnv: ['X_MCP_SERVER_URL', 'X_MCP_AUTH_TOKEN (optional)'],
+  requiredEnv: [
+    'X_MCP_SERVER_URL',
+    'X_MCP_AUTH_TOKEN (hosted X MCP)',
+  ],
   configHint:
-    'Set X_MCP_SERVER_URL to a read-capable X MCP server. Optionally set X_MCP_AUTH_TOKEN and X_MCP_SEARCH_TOOL.',
+    'For hosted X MCP, set X_MCP_SERVER_URL=https://api.x.com/mcp and X_MCP_AUTH_TOKEN to an app-only Bearer token. Optionally set X_MCP_SEARCH_TOOL.',
   isConfigured() {
     return !!process.env.X_MCP_SERVER_URL
   },
@@ -135,14 +189,11 @@ export const xConnector: SourceConnector = {
     }
 
     const limit = clampLimit(input.limit)
-    const { structured, text } = await callTool(opts, tool, {
-      query: input.query,
-      q: input.query,
-      max_results: limit,
-      limit,
-      since: input.since,
-      until: input.until,
-    })
+    const { structured, text } = await callTool(
+      opts,
+      tool,
+      buildSearchArgs(tool, input, limit),
+    )
 
     const items = toItems(structured, text)
     if (items.length === 0 && text.trim().length > 0) {

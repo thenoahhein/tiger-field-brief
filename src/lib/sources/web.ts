@@ -15,12 +15,14 @@ import {
  * Web search connector.
  *
  * Provider is selected via `WEB_SEARCH_PROVIDER` and the API key via
- * `WEB_SEARCH_API_KEY`. The DEFAULT provider is **Tavily** — it returns a clean
- * snippet/`content` field per result which maps well to our normalized shape.
+ * `WEB_SEARCH_API_KEY`. Perplexity can also use `PERPLEXITY_API_KEY`. The
+ * DEFAULT provider is **Tavily** — it returns a clean snippet/`content` field
+ * per result which maps well to our normalized shape.
  *
- * Additional providers (Brave, Serper) are included so the provider can be
- * swapped via env without code changes. To add another provider, implement a
- * function with the {@link ProviderFn} signature and register it in `PROVIDERS`.
+ * Additional providers (Brave, Serper, Perplexity) are included so the provider
+ * can be swapped via env without code changes. To add another provider,
+ * implement a function with the {@link ProviderFn} signature and register it in
+ * `PROVIDERS`.
  */
 
 type ProviderFn = (
@@ -31,7 +33,17 @@ type ProviderFn = (
 const DEFAULT_PROVIDER = 'tavily'
 
 function provider(): string {
-  return (process.env.WEB_SEARCH_PROVIDER || DEFAULT_PROVIDER).toLowerCase()
+  return (
+    process.env.WEB_SEARCH_PROVIDER ||
+    (process.env.PERPLEXITY_API_KEY ? 'perplexity' : DEFAULT_PROVIDER)
+  ).toLowerCase()
+}
+
+function apiKeyForProvider(selected: string): string | undefined {
+  if (selected === 'perplexity') {
+    return process.env.PERPLEXITY_API_KEY || process.env.WEB_SEARCH_API_KEY
+  }
+  return process.env.WEB_SEARCH_API_KEY
 }
 
 /**
@@ -141,26 +153,79 @@ const serper: ProviderFn = async (apiKey, input) => {
   }))
 }
 
-const PROVIDERS: Record<string, ProviderFn> = { tavily, brave, serper }
+// --- Perplexity Search API --------------------------------------------------
+const perplexity: ProviderFn = async (apiKey, input) => {
+  const res = await fetch(endpoint('https://api.perplexity.ai/search'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: input.query,
+      max_results: Math.min(20, clampLimit(input.limit)),
+      search_context_size: 'low',
+      ...(input.since ? { search_after_date_filter: toUsDate(input.since) } : {}),
+      ...(input.until ? { search_before_date_filter: toUsDate(input.until) } : {}),
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`Perplexity Search request failed (${res.status}).`)
+  }
+  const data: unknown = await res.json()
+  const results =
+    isRecord(data) && Array.isArray(data.results) ? data.results : []
+  const captured = nowIso()
+  return results.filter(isRecord).map((r) => ({
+    sourceType: 'web' as const,
+    sourceName: 'perplexity',
+    title: pickString(r, 'title'),
+    url: pickString(r, 'url'),
+    publishedAt: pickString(r, 'date', 'last_updated'),
+    capturedAt: captured,
+    text: truncate(pickString(r, 'snippet') ?? '', MAX_RESULT_TEXT_CHARS),
+    metadata: {
+      query: input.query,
+      lastUpdated: pickString(r, 'last_updated'),
+      requestId: isRecord(data) ? data.id : undefined,
+    },
+  }))
+}
+
+function toUsDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `${date.getUTCMonth() + 1}/${date.getUTCDate()}/${date.getUTCFullYear()}`
+}
+
+const PROVIDERS: Record<string, ProviderFn> = {
+  tavily,
+  brave,
+  serper,
+  perplexity,
+}
 
 export const webConnector: SourceConnector = {
   type: 'web',
   name: 'Web Search',
-  requiredEnv: ['WEB_SEARCH_API_KEY', 'WEB_SEARCH_PROVIDER (optional)'],
+  requiredEnv: [
+    'WEB_SEARCH_API_KEY or PERPLEXITY_API_KEY',
+    'WEB_SEARCH_PROVIDER (optional)',
+  ],
   configHint:
-    'Set WEB_SEARCH_API_KEY. Optionally set WEB_SEARCH_PROVIDER (tavily | brave | serper; default tavily).',
+    'Set WEB_SEARCH_API_KEY. Optionally set WEB_SEARCH_PROVIDER (tavily | brave | serper | perplexity; default tavily). For Perplexity, PERPLEXITY_API_KEY is also supported.',
   isConfigured() {
-    return (
-      !!process.env.WEB_SEARCH_API_KEY && provider() in PROVIDERS
-    )
+    const selected = provider()
+    return !!apiKeyForProvider(selected) && selected in PROVIDERS
   },
   async search(input) {
-    const apiKey = process.env.WEB_SEARCH_API_KEY
+    const selected = provider()
+    const apiKey = apiKeyForProvider(selected)
     if (!apiKey) throw new Error('Web search is not configured.')
-    const fn = PROVIDERS[provider()]
+    const fn = PROVIDERS[selected]
     if (!fn) {
       throw new Error(
-        `Unsupported WEB_SEARCH_PROVIDER "${provider()}". Use tavily, brave, or serper.`,
+        `Unsupported WEB_SEARCH_PROVIDER "${selected}". Use tavily, brave, serper, or perplexity.`,
       )
     }
     return fn(apiKey, input)
