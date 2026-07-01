@@ -55,6 +55,9 @@ model SourceSearchRun {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
+  watchlistId String?
+  watchlist   Watchlist? @relation(fields: [watchlistId], references: [id], onDelete: SetNull)
+
   sourceType String
   query      String
   since      DateTime?
@@ -62,6 +65,8 @@ model SourceSearchRun {
   limit      Int?
 
   results SourceResult[]
+
+  @@index([watchlistId])
 }
 
 model SourceResult {
@@ -109,4 +114,80 @@ model Brief {
   recommendedAction     String?
   pmmTakeaway           String?
   fullMarkdown          String
+
+  actionItems ActionItem[]
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name        String
+  category    String
+  sourceType  String
+  query       String
+  cadence     String
+  enabled     Boolean @default(true)
+  limit       Int     @default(10)
+  lookbackDays Int    @default(7)
+
+  lastRunAt DateTime?
+  nextRunAt DateTime?
+  lastError String?
+
+  runs SourceSearchRun[]
+
+  @@index([enabled, nextRunAt])
+  @@index([category])
+}
+
+model IntelligenceReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  reportType  String
+  periodStart DateTime
+  periodEnd   DateTime
+
+  title                String?
+  summary              String
+  learnedJson          Json
+  repeatedPainsJson    Json
+  competitorsJson      Json
+  productConfusionJson Json
+  recommendedActionsJson Json
+  salesNotesJson       Json
+  productNotesJson     Json
+  sourceRunIdsJson     Json?
+  fullMarkdown         String
+
+  actionItems ActionItem[]
+
+  @@index([reportType, createdAt])
+}
+
+model ActionItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reportId String?
+  report   IntelligenceReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  briefId String?
+  brief   Brief? @relation(fields: [briefId], references: [id], onDelete: SetNull)
+
+  origin         String  @default("report")
+  title          String
+  recommendation String
+  rationale      String?
+  owner          String?
+  useFor         String?
+  status         String  @default("new")
+  evidenceJson   Json?
+
+  @@index([status])
+  @@index([reportId])
+  @@index([briefId])
 }

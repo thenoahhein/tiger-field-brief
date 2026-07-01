@@ -1,8 +1,9 @@
-import 'dotenv/config'
 import Anthropic from '@anthropic-ai/sdk'
 import {
+  intelligenceReportSchema,
   llmResponseSchema,
   type BriefMetadata,
+  type IntelligenceReportResponse,
   type LlmResponse,
 } from './schema'
 
@@ -83,11 +84,68 @@ Raw notes:
 Metadata:
 {{METADATA}}`
 
+const REPORT_PROMPT_TEMPLATE = `You are helping produce a weekly GTM intelligence synthesis for TigerData's time-series business.
+
+TigerData sells a Postgres-based time-series, analytics, and real-time data platform. We care about customer pains, sales objections, competitive pressure, product confusion, docs gaps, sales enablement opportunities, product feedback, and useful market narrative.
+
+The input below is a bundle of source-search runs, extracted signals, and generated daily/source briefs. Treat public web and X data as directional market signal, not verified customer truth. Prefer repeated patterns and high-quality/internal/customer evidence when available. Do not invent details.
+
+Your job is not to summarize everything. Your job is to say what TigerData should do with the signal.
+
+Return strict JSON with this shape:
+
+{
+  "title": "string",
+  "summary": "string",
+  "learned": ["string"],
+  "repeatedPains": ["string"],
+  "competitors": [
+    {
+      "name": "string",
+      "whyItMatters": "string",
+      "evidence": ["string"]
+    }
+  ],
+  "productConfusion": ["string"],
+  "recommendedActions": [
+    {
+      "title": "string",
+      "recommendation": "string",
+      "rationale": "string or null",
+      "owner": "PMM | Sales | Docs | Product | DevRel | Unknown",
+      "useFor": "sales_enablement | positioning | docs | product_feedback | devrel | research",
+      "evidence": ["string"]
+    }
+  ],
+  "salesNotes": ["string"],
+  "productNotes": ["string"],
+  "fullMarkdown": "string"
+}
+
+Report type:
+{{REPORT_TYPE}}
+
+Period:
+{{PERIOD}}
+
+Evidence bundle:
+{{EVIDENCE}}`
+
 function buildPrompt(rawNote: string, metadata: BriefMetadata): string {
   return PROMPT_TEMPLATE.replace('{{RAW_NOTES}}', rawNote).replace(
     '{{METADATA}}',
     JSON.stringify(metadata, null, 2),
   )
+}
+
+function buildReportPrompt(input: {
+  reportType: string
+  period: string
+  evidence: string
+}): string {
+  return REPORT_PROMPT_TEMPLATE.replace('{{REPORT_TYPE}}', input.reportType)
+    .replace('{{PERIOD}}', input.period)
+    .replace('{{EVIDENCE}}', input.evidence)
 }
 
 /** Pull a JSON object out of an LLM response, tolerating ```json fences / stray prose. */
@@ -196,6 +254,41 @@ export async function generateFieldBrief(
     )
     throw new FieldBriefError(
       'The LLM response did not match the expected shape. No data was saved.',
+    )
+  }
+  return result.data
+}
+
+export async function generateIntelligenceReport(input: {
+  reportType: string
+  period: string
+  evidence: string
+}): Promise<IntelligenceReportResponse> {
+  const prompt = buildReportPrompt(input)
+  const provider = (process.env.LLM_PROVIDER || 'anthropic').toLowerCase()
+
+  let rawText: string
+  try {
+    rawText =
+      provider === 'openai'
+        ? await callOpenAI(prompt)
+        : await callAnthropic(prompt)
+  } catch (err) {
+    if (err instanceof FieldBriefError) throw err
+    throw new FieldBriefError(
+      `LLM request failed: ${err instanceof Error ? err.message : 'unknown error'}`,
+    )
+  }
+
+  const parsed = extractJson(rawText)
+  const result = intelligenceReportSchema.safeParse(parsed)
+  if (!result.success) {
+    console.error(
+      '[generateIntelligenceReport] LLM output failed validation:',
+      JSON.stringify(result.error.issues),
+    )
+    throw new FieldBriefError(
+      'The LLM response did not match the expected report shape. No report was saved.',
     )
   }
   return result.data

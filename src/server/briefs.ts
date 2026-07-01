@@ -11,6 +11,84 @@ import {
 } from './schema'
 
 /**
+ * Derive action items from a brief and its extracted signals.
+ * Each brief-level action uses origin="brief".
+ */
+function deriveActionsFromBrief(
+  brief: LlmBrief,
+  signals: LlmSignal[],
+): Array<{
+  title: string
+  recommendation: string
+  rationale: string | null
+  owner: string | null
+  useFor: string | null
+  evidenceJson: string[]
+}> {
+  const actions: Array<{
+    title: string
+    recommendation: string
+    rationale: string | null
+    owner: string | null
+    useFor: string | null
+    evidenceJson: string[]
+  }> = []
+
+  if (brief.recommendedAction) {
+    actions.push({
+      title: brief.title
+        ? `Brief: ${brief.title}`
+        : 'Brief recommended action',
+      recommendation: brief.recommendedAction,
+      rationale: brief.pmmTakeaway || null,
+      owner: 'PMM',
+      useFor: 'positioning',
+      evidenceJson: brief.topSignals.slice(0, 3),
+    })
+  }
+
+  for (const gap of brief.docsGaps) {
+    actions.push({
+      title: `Docs gap: ${gap.slice(0, 80)}`,
+      recommendation: gap,
+      rationale: null,
+      owner: 'Docs',
+      useFor: 'docs',
+      evidenceJson: [],
+    })
+  }
+
+  for (const need of brief.salesEnablement) {
+    actions.push({
+      title: `Sales enablement: ${need.slice(0, 80)}`,
+      recommendation: need,
+      rationale: null,
+      owner: 'Sales',
+      useFor: 'sales_enablement',
+      evidenceJson: [],
+    })
+  }
+
+  const seen = new Set<string>()
+  for (const s of signals) {
+    if (!s.suggestedAction || seen.has(s.suggestedAction)) continue
+    seen.add(s.suggestedAction)
+    actions.push({
+      title: `Signal: ${s.suggestedAction.slice(0, 80)}`,
+      recommendation: s.suggestedAction,
+      rationale: s.businessImplication || null,
+      owner: null,
+      useFor: null,
+      evidenceJson: [s.pain, s.exactCustomerLanguage].filter(
+        (v): v is string => v != null,
+      ),
+    })
+  }
+
+  return actions
+}
+
+/**
  * Persist a generated brief + its signals against an already-created RawNote,
  * inside an existing transaction. Shared by the manual flow (generateBrief) and
  * the source-search flow (generateBriefFromResults in ./sources).
@@ -63,6 +141,22 @@ export async function persistBriefBundle(
         confidence: s.confidence,
         sourceQuality: s.sourceQuality,
         signalType: s.signalType,
+      })),
+    })
+  }
+
+  const derived = deriveActionsFromBrief(brief, signals)
+  if (derived.length > 0) {
+    await tx.actionItem.createMany({
+      data: derived.map((a) => ({
+        briefId: savedBrief.id,
+        origin: 'brief',
+        title: a.title,
+        recommendation: a.recommendation,
+        rationale: a.rationale,
+        owner: a.owner,
+        useFor: a.useFor,
+        evidenceJson: a.evidenceJson as Prisma.InputJsonValue,
       })),
     })
   }

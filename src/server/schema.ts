@@ -119,3 +119,100 @@ export const generateFromResultsSchema = z.object({
 export type GenerateFromResultsInput = z.infer<
   typeof generateFromResultsSchema
 >
+
+const textArray = z.array(z.string()).default([])
+
+export const reportActionSchema = z.object({
+  title: textOrEmpty,
+  recommendation: textOrEmpty,
+  rationale: nullableString,
+  owner: z
+    .enum(['PMM', 'Sales', 'Docs', 'Product', 'DevRel', 'Unknown'])
+    .nullish()
+    .transform((v) => v ?? null),
+  useFor: z
+    .enum([
+      'sales_enablement',
+      'positioning',
+      'docs',
+      'product_feedback',
+      'devrel',
+      'research',
+    ])
+    .nullish()
+    .transform((v) => v ?? null),
+  evidence: textArray,
+})
+export type ReportAction = z.infer<typeof reportActionSchema>
+
+export const intelligenceReportSchema = z.object({
+  title: textOrEmpty,
+  summary: textOrEmpty,
+  learned: textArray,
+  repeatedPains: textArray,
+  competitors: z
+    .array(
+      z.object({
+        name: textOrEmpty,
+        whyItMatters: textOrEmpty,
+        evidence: textArray,
+      }),
+    )
+    .default([]),
+  productConfusion: textArray,
+  recommendedActions: z.array(reportActionSchema).default([]),
+  salesNotes: textArray,
+  productNotes: textArray,
+  fullMarkdown: textOrEmpty,
+})
+export type IntelligenceReportResponse = z.infer<
+  typeof intelligenceReportSchema
+>
+
+export const runWatchlistsSchema = z.object({
+  mode: z.enum(['due', 'all']).default('due'),
+})
+
+export const generateReportSchema = z.object({
+  reportType: z
+    .enum([
+      'weekly_synthesis',
+      'competitive_pressure',
+      'docs_confusion',
+      'customer_language',
+    ])
+    .default('weekly_synthesis'),
+  days: z.coerce.number().int().min(1).max(90).default(7),
+})
+
+export const updateActionStatusSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['new', 'accepted', 'ignored', 'done']),
+})
+
+export const createWatchlistSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required.'),
+  category: z.string().trim().min(1, 'Category is required.'),
+  sourceType: z.union([searchableSourceSchema, z.literal('all')]),
+  query: z.string().trim().min(1, 'Query is required.'),
+  cadence: z.enum(['daily', 'weekly']).default('daily'),
+  enabled: z.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  lookbackDays: z.coerce.number().int().min(1).max(90).default(7),
+})
+
+export const updateWatchlistSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1).optional(),
+  sourceType: z.union([searchableSourceSchema, z.literal('all')]).optional(),
+  query: z.string().trim().min(1).optional(),
+  cadence: z.enum(['daily', 'weekly']).optional(),
+  enabled: z.boolean().optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  lookbackDays: z.coerce.number().int().min(1).max(90).optional(),
+})
+
+export const deleteWatchlistSchema = z.object({
+  id: z.string().min(1),
+})

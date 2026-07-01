@@ -4,6 +4,11 @@ export const Route = createFileRoute('/')({ component: Home })
 
 const links = [
   {
+    to: '/intelligence',
+    title: 'GTM Intelligence Loop',
+    desc: 'Run scheduled watchlists, review weekly reports, and manage action items.',
+  },
+  {
     to: '/new',
     title: 'New Field Brief',
     desc: 'Paste raw GTM notes and generate a structured daily brief.',
@@ -35,7 +40,7 @@ function Home() {
         competitor mentions, docs gaps, product confusion, and recommended PMM
         actions.
       </p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {links.map((l) => (
           <Link
             key={l.to}

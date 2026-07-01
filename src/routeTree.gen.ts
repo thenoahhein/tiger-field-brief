@@ -13,11 +13,13 @@ import { Route as SignalsRouteImport } from './routes/signals'
 import { Route as NewRouteImport } from './routes/new'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SourcesIndexRouteImport } from './routes/sources/index'
+import { Route as IntelligenceIndexRouteImport } from './routes/intelligence/index'
 import { Route as BriefsIndexRouteImport } from './routes/briefs/index'
 import { Route as SourcesSearchRouteImport } from './routes/sources/search'
 import { Route as BriefsIdRouteImport } from './routes/briefs/$id'
 import { Route as SourcesRunsIndexRouteImport } from './routes/sources/runs/index'
 import { Route as SourcesRunsIdRouteImport } from './routes/sources/runs/$id'
+import { Route as IntelligenceReportsIdRouteImport } from './routes/intelligence/reports/$id'
 
 const SignalsRoute = SignalsRouteImport.update({
   id: '/signals',
@@ -37,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const SourcesIndexRoute = SourcesIndexRouteImport.update({
   id: '/sources/',
   path: '/sources/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntelligenceIndexRoute = IntelligenceIndexRouteImport.update({
+  id: '/intelligence/',
+  path: '/intelligence/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BriefsIndexRoute = BriefsIndexRouteImport.update({
@@ -64,6 +71,11 @@ const SourcesRunsIdRoute = SourcesRunsIdRouteImport.update({
   path: '/sources/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IntelligenceReportsIdRoute = IntelligenceReportsIdRouteImport.update({
+  id: '/intelligence/reports/$id',
+  path: '/intelligence/reports/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -72,7 +84,9 @@ export interface FileRoutesByFullPath {
   '/briefs/$id': typeof BriefsIdRoute
   '/sources/search': typeof SourcesSearchRoute
   '/briefs/': typeof BriefsIndexRoute
+  '/intelligence/': typeof IntelligenceIndexRoute
   '/sources/': typeof SourcesIndexRoute
+  '/intelligence/reports/$id': typeof IntelligenceReportsIdRoute
   '/sources/runs/$id': typeof SourcesRunsIdRoute
   '/sources/runs/': typeof SourcesRunsIndexRoute
 }
@@ -83,7 +97,9 @@ export interface FileRoutesByTo {
   '/briefs/$id': typeof BriefsIdRoute
   '/sources/search': typeof SourcesSearchRoute
   '/briefs': typeof BriefsIndexRoute
+  '/intelligence': typeof IntelligenceIndexRoute
   '/sources': typeof SourcesIndexRoute
+  '/intelligence/reports/$id': typeof IntelligenceReportsIdRoute
   '/sources/runs/$id': typeof SourcesRunsIdRoute
   '/sources/runs': typeof SourcesRunsIndexRoute
 }
@@ -95,7 +111,9 @@ export interface FileRoutesById {
   '/briefs/$id': typeof BriefsIdRoute
   '/sources/search': typeof SourcesSearchRoute
   '/briefs/': typeof BriefsIndexRoute
+  '/intelligence/': typeof IntelligenceIndexRoute
   '/sources/': typeof SourcesIndexRoute
+  '/intelligence/reports/$id': typeof IntelligenceReportsIdRoute
   '/sources/runs/$id': typeof SourcesRunsIdRoute
   '/sources/runs/': typeof SourcesRunsIndexRoute
 }
@@ -108,7 +126,9 @@ export interface FileRouteTypes {
     | '/briefs/$id'
     | '/sources/search'
     | '/briefs/'
+    | '/intelligence/'
     | '/sources/'
+    | '/intelligence/reports/$id'
     | '/sources/runs/$id'
     | '/sources/runs/'
   fileRoutesByTo: FileRoutesByTo
@@ -119,7 +139,9 @@ export interface FileRouteTypes {
     | '/briefs/$id'
     | '/sources/search'
     | '/briefs'
+    | '/intelligence'
     | '/sources'
+    | '/intelligence/reports/$id'
     | '/sources/runs/$id'
     | '/sources/runs'
   id:
@@ -130,7 +152,9 @@ export interface FileRouteTypes {
     | '/briefs/$id'
     | '/sources/search'
     | '/briefs/'
+    | '/intelligence/'
     | '/sources/'
+    | '/intelligence/reports/$id'
     | '/sources/runs/$id'
     | '/sources/runs/'
   fileRoutesById: FileRoutesById
@@ -142,7 +166,9 @@ export interface RootRouteChildren {
   BriefsIdRoute: typeof BriefsIdRoute
   SourcesSearchRoute: typeof SourcesSearchRoute
   BriefsIndexRoute: typeof BriefsIndexRoute
+  IntelligenceIndexRoute: typeof IntelligenceIndexRoute
   SourcesIndexRoute: typeof SourcesIndexRoute
+  IntelligenceReportsIdRoute: typeof IntelligenceReportsIdRoute
   SourcesRunsIdRoute: typeof SourcesRunsIdRoute
   SourcesRunsIndexRoute: typeof SourcesRunsIndexRoute
 }
@@ -175,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/sources'
       fullPath: '/sources/'
       preLoaderRoute: typeof SourcesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/intelligence/': {
+      id: '/intelligence/'
+      path: '/intelligence'
+      fullPath: '/intelligence/'
+      preLoaderRoute: typeof IntelligenceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/briefs/': {
@@ -212,6 +245,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SourcesRunsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/intelligence/reports/$id': {
+      id: '/intelligence/reports/$id'
+      path: '/intelligence/reports/$id'
+      fullPath: '/intelligence/reports/$id'
+      preLoaderRoute: typeof IntelligenceReportsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -222,7 +262,9 @@ const rootRouteChildren: RootRouteChildren = {
   BriefsIdRoute: BriefsIdRoute,
   SourcesSearchRoute: SourcesSearchRoute,
   BriefsIndexRoute: BriefsIndexRoute,
+  IntelligenceIndexRoute: IntelligenceIndexRoute,
   SourcesIndexRoute: SourcesIndexRoute,
+  IntelligenceReportsIdRoute: IntelligenceReportsIdRoute,
   SourcesRunsIdRoute: SourcesRunsIdRoute,
   SourcesRunsIndexRoute: SourcesRunsIndexRoute,
 }
