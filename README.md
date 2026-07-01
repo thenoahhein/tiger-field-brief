@@ -1,13 +1,14 @@
 # Tiger Field Brief 🐅
 
 A lightweight internal tool that collects raw GTM signal for TigerData's
-time-series business and turns it into a **daily field intelligence brief** —
-customer pain, sales objections, competitor mentions, docs gaps, product
-confusion, and recommended PMM actions.
+time-series business and turns it into a **field intelligence loop** — scheduled
+watchlists, daily/source briefs, weekly synthesis reports, and recommended PMM
+actions.
 
-Paste raw notes, optionally add metadata, click **Generate Brief**, and the app
-sends the notes to an LLM, extracts structured GTM signals, generates a brief,
-and saves everything to Postgres so you can browse and search later.
+Use it manually by pasting notes, or let watchlists pull read-only source signal
+from web, X, and Slack. The app extracts structured GTM signals, generates
+briefs, and rolls the week into action items for PMM, Sales, Docs, Product, and
+DevRel.
 
 ## Stack
 
@@ -22,6 +23,8 @@ and saves everything to Postgres so you can browse and search later.
 | Route               | Purpose                                                        |
 | ------------------- | -------------------------------------------------------------- |
 | `/`                 | Landing page                                                   |
+| `/intelligence`     | Scheduled watchlists, latest reports, and action queue         |
+| `/intelligence/reports/:id` | Weekly synthesis report + generated actions            |
 | `/new`              | Form to paste raw notes + metadata and generate a brief        |
 | `/sources`          | Configuration status of each source (manual / web / X / Slack) |
 | `/sources/search`   | Search external sources, select results, generate a brief      |
@@ -187,6 +190,36 @@ timestamp, and permalink when available.
    are redirected to the brief.
 4. Review past searches at `/sources/runs`.
 
+## GTM intelligence loop
+
+The main product surface is `/intelligence`. It reframes the app from “search
+when I remember” into a passive GTM radar:
+
+1. **Watchlists** store recurring searches with a source (`web`, `x`, `slack`,
+   or `all`), cadence (`daily` or `weekly`), lookback window, limit, next run,
+   and last run status.
+2. **Run Due** executes due watchlists against configured sources, persists
+   `SourceSearchRun` / `SourceResult` rows, then feeds the results through the
+   normal `generateFieldBrief()` pipeline so watchlist output becomes ordinary
+   `RawNote` + `Signal` + `Brief` data.
+3. **Generate Weekly Report** looks across recent source runs, extracted
+   signals, and briefs, then creates an `IntelligenceReport`.
+4. Each report creates an **Action Queue** with owner/use-case tags such as
+   `PMM`, `Sales`, `Docs`, `Product`, `sales_enablement`, `positioning`,
+   `docs`, or `product_feedback`.
+
+Default watchlists are seeded the first time `/intelligence` loads:
+
+- ClickHouse and InfluxDB pressure
+- Migration and retention pain
+- Product confusion
+- Market narrative
+
+This is intentionally a pragmatic v0. The database already tracks cadence and
+`nextRunAt`, so an external scheduler can later call the same server-side runner.
+For now, `/intelligence` exposes a safe in-app **Run Due** control rather than a
+public cron endpoint.
+
 ### Source quality
 
 External results are **raw market signals, not verified facts**. The prompt asks
@@ -207,12 +240,13 @@ carries `sourceQuality` (`high|medium|low`) and `signalType`
 ## Project layout
 
 ```
-prisma/schema.prisma           # RawNote, Signal, Brief, SourceSearchRun, SourceResult
+prisma/schema.prisma           # RawNote, Signal, Brief, SourceSearchRun, SourceResult, Watchlist, IntelligenceReport, ActionItem
 src/server/db.ts               # Prisma client singleton
-src/server/schema.ts           # Zod schemas (input + LLM output + source search)
-src/server/llm.ts              # generateFieldBrief() — LLM call + validation
+src/server/schema.ts           # Zod schemas (input + LLM output + source search + reports)
+src/server/llm.ts              # generateFieldBrief() / generateIntelligenceReport()
 src/server/briefs.ts           # server fns: generate / list / get / filter + persist helper
 src/server/sources.ts          # server fns: source search / runs / generate-from-results
+src/server/intelligence.ts     # watchlists, scheduled runs, weekly reports, action queue
 src/lib/sources/               # read-only source connector layer
   types.ts                     #   shared SourceConnector / SourceSearchResult types
   web.ts                       #   web search (tavily | brave | serper)
@@ -221,6 +255,7 @@ src/lib/sources/               # read-only source connector layer
   mcp.ts                       #   minimal MCP JSON-RPC client
   index.ts                     #   connector registry + status helpers
 src/config/default-searches.ts # default saved search groups
+src/routes/intelligence/       # /intelligence and /intelligence/reports/$id
 src/routes/sources/            # /sources, /sources/search, /sources/runs[, /$id]
 src/routes/new.tsx             # /new
 src/routes/briefs/             # /briefs and /briefs/$id
