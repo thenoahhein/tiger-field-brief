@@ -5,9 +5,12 @@ import { prisma } from './db'
 import { persistBriefBundle } from './briefs'
 import { generateFieldBrief, generateIntelligenceReport } from './llm'
 import {
+  createWatchlistSchema,
+  deleteWatchlistSchema,
   generateReportSchema,
   runWatchlistsSchema,
   updateActionStatusSchema,
+  updateWatchlistSchema,
   type BriefMetadata,
 } from './schema'
 import {
@@ -375,8 +378,11 @@ export const getIntelligenceDashboard = createServerFn({ method: 'GET' }).handle
         prisma.actionItem.findMany({
           where: { status: { in: ['new', 'accepted'] } },
           orderBy: { createdAt: 'desc' },
-          take: 12,
-          include: { report: { select: { id: true, title: true } } },
+          take: 20,
+          include: {
+            report: { select: { id: true, title: true } },
+            brief: { select: { id: true, title: true } },
+          },
         }),
         listSourceStatuses(),
         prisma.sourceSearchRun.findMany({
@@ -424,9 +430,12 @@ export const getIntelligenceDashboard = createServerFn({ method: 'GET' }).handle
         owner: a.owner,
         useFor: a.useFor,
         status: a.status,
+        origin: a.origin,
         createdAt: a.createdAt.toISOString(),
         reportId: a.reportId,
         reportTitle: a.report?.title ?? null,
+        briefId: a.briefId,
+        briefTitle: a.brief?.title ?? null,
       })),
       recentRuns: recentRuns.map((r) => ({
         id: r.id,
@@ -553,7 +562,14 @@ export const getIntelligenceReport = createServerFn({ method: 'GET' })
         evidence: string[]
       }>,
       productConfusion: report.productConfusionJson as string[],
-      recommendedActions: report.recommendedActionsJson as unknown[],
+      recommendedActions: report.recommendedActionsJson as Array<{
+        title: string
+        recommendation: string
+        rationale: string | null
+        owner: string | null
+        useFor: string | null
+        evidence: string[]
+      }>,
       salesNotes: report.salesNotesJson as string[],
       productNotes: report.productNotesJson as string[],
       fullMarkdown: report.fullMarkdown,
@@ -579,3 +595,102 @@ export const updateActionStatus = createServerFn({ method: 'POST' })
     })
     return { ok: true }
   })
+
+export const createWatchlist = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => createWatchlistSchema.parse(data))
+  .handler(async ({ data }) => {
+    const now = new Date()
+    const watchlist = await prisma.watchlist.create({
+      data: {
+        ...data,
+        nextRunAt: now,
+      },
+    })
+    return { id: watchlist.id }
+  })
+
+export const updateWatchlist = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => updateWatchlistSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { id, ...fields } = data
+    await prisma.watchlist.update({
+      where: { id },
+      data: fields,
+    })
+    return { ok: true }
+  })
+
+export const deleteWatchlist = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => deleteWatchlistSchema.parse(data))
+  .handler(async ({ data }) => {
+    await prisma.watchlist.delete({ where: { id: data.id } })
+    return { ok: true }
+  })
+
+export const toggleWatchlist = createServerFn({ method: 'POST' })
+  .validator((data: unknown) =>
+    z.object({ id: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const w = await prisma.watchlist.findUniqueOrThrow({
+      where: { id: data.id },
+      select: { enabled: true },
+    })
+    await prisma.watchlist.update({
+      where: { id: data.id },
+      data: {
+        enabled: !w.enabled,
+        nextRunAt: !w.enabled ? new Date() : undefined,
+      },
+    })
+    return { ok: true, enabled: !w.enabled }
+  })
+
+let schedulerTimer: ReturnType<typeof setInterval> | null = null
+
+export function startScheduler(intervalMs = 60_000) {
+  if (schedulerTimer) return
+  schedulerTimer = setInterval(async () => {
+    try {
+      const now = new Date()
+      const due = await prisma.watchlist.findMany({
+        where: {
+          enabled: true,
+          OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }],
+        },
+      })
+      for (const watchlist of due) {
+        try {
+          await runSingleWatchlist(watchlist)
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Scheduled run failed.'
+          await prisma.watchlist.update({
+            where: { id: watchlist.id },
+            data: {
+              lastRunAt: new Date(),
+              nextRunAt: nextRunFrom(watchlist.cadence),
+              lastError: message,
+            },
+          })
+        }
+      }
+    } catch {
+      // swallow top-level errors so the interval keeps ticking
+    }
+  }, intervalMs)
+}
+
+export function stopScheduler() {
+  if (schedulerTimer) {
+    clearInterval(schedulerTimer)
+    schedulerTimer = null
+  }
+}
+
+const SCHEDULER_INTERVAL_MS = Number(
+  process.env.SCHEDULER_INTERVAL_MS || '60000',
+)
+if (SCHEDULER_INTERVAL_MS > 0) {
+  startScheduler(SCHEDULER_INTERVAL_MS)
+}

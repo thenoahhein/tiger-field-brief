@@ -189,3 +189,30 @@ export const updateActionStatusSchema = z.object({
   id: z.string().min(1),
   status: z.enum(['new', 'accepted', 'ignored', 'done']),
 })
+
+export const createWatchlistSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required.'),
+  category: z.string().trim().min(1, 'Category is required.'),
+  sourceType: z.union([searchableSourceSchema, z.literal('all')]),
+  query: z.string().trim().min(1, 'Query is required.'),
+  cadence: z.enum(['daily', 'weekly']).default('daily'),
+  enabled: z.boolean().default(true),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  lookbackDays: z.coerce.number().int().min(1).max(90).default(7),
+})
+
+export const updateWatchlistSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1).optional(),
+  sourceType: z.union([searchableSourceSchema, z.literal('all')]).optional(),
+  query: z.string().trim().min(1).optional(),
+  cadence: z.enum(['daily', 'weekly']).optional(),
+  enabled: z.boolean().optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  lookbackDays: z.coerce.number().int().min(1).max(90).optional(),
+})
+
+export const deleteWatchlistSchema = z.object({
+  id: z.string().min(1),
+})

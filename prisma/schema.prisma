@@ -114,6 +114,8 @@ model Brief {
   recommendedAction     String?
   pmmTakeaway           String?
   fullMarkdown          String
+
+  actionItems ActionItem[]
 }
 
 model Watchlist {
@@ -173,14 +175,19 @@ model ActionItem {
   reportId String?
   report   IntelligenceReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
 
+  briefId String?
+  brief   Brief? @relation(fields: [briefId], references: [id], onDelete: SetNull)
+
+  origin         String  @default("report")
   title          String
   recommendation String
   rationale      String?
   owner          String?
   useFor         String?
-  status         String @default("new")
+  status         String  @default("new")
   evidenceJson   Json?
 
   @@index([status])
   @@index([reportId])
+  @@index([briefId])
 }
